@@ -238,7 +238,7 @@ export default function Result() {
           }}
         />
 
-        {question.domain !== 'Info' && (
+        {question && question.domain !== 'Info' && (
           <div className="flex justify-between items-center mb-4">
             <div>
               <h2 className="text-xl font-semibold drop-shadow">Poll Results</h2>
