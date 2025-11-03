@@ -1,0 +1,469 @@
+import React, { useEffect, useState } from "react";
+import { db, doc, getDoc, onSnapshot, collection, getDocs } from "../firebase";
+import { Link } from "react-router-dom";
+import bgImage from "./assets/Background.png"; // <- adjust filename if different
+import logoLeft from "./assets/IU logo New.png"; // added: left logo
+import logoRight from "./assets/Vyom logo.png"; // added: right logo
+import logoRightbottom from "./assets/GA logo new.png"; // added: right logo
+
+const RATING_LABELS = [
+  "Not useful",
+  "Slightly useful",
+  "Useful",
+  "Very useful",
+  "Most useful",
+]; // 5-level labels
+
+export default function Result() {
+  const [question, setQuestion] = useState(null);
+  const [optionRatingCounts, setOptionRatingCounts] = useState([]); // for each option: [count1,count2,...,count5]
+  const [totalResponses, setTotalResponses] = useState(0);
+
+  // map percentage -> descriptive label (left of percentage)
+  const pctLabelFor = (pct) => {
+    if (pct <= 20) return RATING_LABELS[0]; // Not useful
+    if (pct <= 40) return RATING_LABELS[1]; // Slightly
+    if (pct <= 60) return RATING_LABELS[2]; // Useful
+    if (pct <= 80) return RATING_LABELS[3]; // Very
+    return RATING_LABELS[4]; // Most useful
+  };
+
+  useEffect(() => {
+    const activeRef = doc(db, "active", "question");
+    const unsubActive = onSnapshot(activeRef, async (snap) => {
+      const data = snap.exists() ? snap.data() : null;
+      const id = data?.questionId || null;
+      if (!id) {
+        setQuestion(null);
+        setOptionRatingCounts([]);
+        setTotalResponses(0);
+        return;
+      }
+      const qSnap = await getDoc(doc(db, "questions", id));
+      if (qSnap.exists()) {
+        const q = { id: qSnap.id, ...qSnap.data() };
+        setQuestion(q);
+        
+        // Initialize response tracking based on domain
+        if (q.domain === 'Truth') {
+          setOptionRatingCounts(new Array(q.statements?.length || 0).fill(0));
+        } else if (q.domain === 'Meme') {
+          setOptionRatingCounts([]);
+        } else if (q.options?.length > 0) {
+          setOptionRatingCounts(
+            new Array(q.options.length)
+              .fill(0)
+              .map(() => new Array(5).fill(0))
+          );
+        }
+        
+        // immediately clear the response counter when a new question becomes active
+        setTotalResponses(0);
+
+        // immediate recount from stored responses so returned counts appear without page reload
+        (async () => {
+          try {
+            const respSnap = await getDocs(collection(db, "responses"));
+            const optsLen = q.options?.length || 0;
+            const counts = new Array(optsLen).fill(0).map(() => new Array(5).fill(0));
+            let tot = 0;
+            respSnap.docs.forEach((d) => {
+              const data = d.data();
+              if (data.questionId === q.id) {
+                tot += 1;
+                if (q.domain === 'Truth' && typeof data.ratings?.[0] === 'number') {
+                  // For Truth domain: single selection index
+                  const selectedIndex = data.ratings[0] - 1;
+                  if (selectedIndex >= 0 && selectedIndex < counts.length) {
+                    counts[selectedIndex] += 1;
+                  }
+                } else if (q.domain === 'Meme' && data.selectedEmployee) {
+                  // For Meme domain: store employee selections
+                  counts.push({ data });
+                } else if (Array.isArray(data.ratings)) {
+                  // For other domains: handle rating arrays
+                  data.ratings.forEach((rVal, i) => {
+                    const rIdx = typeof rVal === "number" ? rVal - 1 : -1;
+                    if (rIdx >= 0 && rIdx < 5 && i < optsLen) counts[i][rIdx] += 1;
+                  });
+                }
+              }
+            });
+            setOptionRatingCounts(counts);
+            setTotalResponses(tot);
+          } catch (err) {
+            console.error("failed to read responses for active question", err);
+          }
+        })();
+      } else {
+        setQuestion(null);
+        setOptionRatingCounts([]);
+      }
+    });
+
+    const unsubResponses = onSnapshot(collection(db, "responses"), (snap) => {
+      (async () => {
+        const aSnap = await getDoc(activeRef);
+        const activeId = aSnap.exists() ? aSnap.data().questionId : null;
+        if (!activeId) {
+          setOptionRatingCounts([]);
+          setTotalResponses(0);
+          return;
+        }
+        const qSnap = await getDoc(doc(db, "questions", activeId));
+        if (!qSnap.exists()) {
+          setOptionRatingCounts([]);
+          setTotalResponses(0);
+          return;
+        }
+        
+        const q = { id: qSnap.id, ...qSnap.data() };
+        const optsLen = q.options?.length || 0;
+        
+        if (q.domain === 'Truth') {
+          // Handle Truth domain responses
+          const counts = new Array(q.statements?.length || 0).fill(0);
+          let tot = 0;
+          snap.docs.forEach((d) => {
+            const data = d.data();
+            if (data.questionId === activeId && Array.isArray(data.ratings)) {
+              tot += 1;
+              const selectedIndex = data.ratings[0] - 1;
+              if (selectedIndex >= 0 && selectedIndex < counts.length) {
+                counts[selectedIndex] += 1;
+              }
+            }
+          });
+          setOptionRatingCounts(counts);
+          setTotalResponses(tot);
+        } else if (q.domain === 'Meme') {
+          // Handle Meme domain responses
+          const counts = [];
+          let tot = 0;
+          snap.docs.forEach((d) => {
+            const data = d.data();
+            if (data.questionId === activeId) {
+              tot += 1;
+              if (data.selectedEmployee) {
+                counts.push({ data });
+              }
+            }
+          });
+          setOptionRatingCounts(counts);
+          setTotalResponses(tot);
+        } else {
+          // Handle other domains with ratings
+          const counts = new Array(optsLen)
+            .fill(0)
+            .map(() => new Array(5).fill(0));
+          let tot = 0;
+          snap.docs.forEach((d) => {
+            const data = d.data();
+            if (data.questionId === activeId && Array.isArray(data.ratings)) {
+              tot += 1;
+              data.ratings.forEach((rVal, i) => {
+                const rIdx = typeof rVal === "number" ? rVal - 1 : -1;
+                if (rIdx >= 0 && rIdx < 5 && i < optsLen) counts[i][rIdx] += 1;
+              });
+            }
+          });
+          setOptionRatingCounts(counts);
+          setTotalResponses(tot);
+        }
+      })();
+    });
+
+    return () => {
+      unsubActive();
+      unsubResponses();
+    };
+  }, []);
+
+  return (
+    <div
+      className="min-h-screen relative flex items-center justify-center p-1"
+      style={{
+        backgroundImage: `url(${bgImage})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        backgroundAttachment: "fixed",
+        backgroundColor: "#f8fafc",
+      }}
+    >
+      {/* single semi-transparent black overlay over the background image */}
+      <div
+        aria-hidden
+        className="absolute inset-0 bg-black/40 pointer-events-none"
+      />
+
+      {/* logos positioned relative to viewport (won't affect container centering) */}
+      <img
+        src={logoLeft}
+        alt="Left logo"
+        className="fixed top-4 left-4 w-56 sm:w-64 h-auto max-h-[calc(100vh-3rem)] object-contain z-30 pointer-events-none"
+      />
+      <img
+        src={logoRight}
+        alt="Right logo"
+        className="fixed top-4 right-4 w-32 sm:w-40 h-auto max-h-[calc(100vh-3rem)] object-contain z-30 pointer-events-none"
+      />
+      <img
+        src={logoRightbottom}
+        alt="Right bottom logo"
+        className="fixed bottom-4 right-4 w-40 sm:w-44 h-auto max-h-[calc(100vh-3rem)] object-contain z-30 pointer-events-none"
+      />
+
+      <div
+        className="w-full max-w-2xl relative overflow-hidden p-4
+                   bg-gradient-to-r from-black/30 via-black/20 to-black/10
+                   backdrop-blur-2xl backdrop-saturate-150
+                   shadow-lg ring-1 ring-white/5 ring-inset text-white"
+        style={{
+          border: "1px solid rgba(255,255,255,0.04)",
+          borderImage:
+            "linear-gradient(90deg, rgba(99,102,241,0.45), rgba(59,130,246,0.25), rgba(6,182,212,0.2)) 1",
+          boxShadow:
+            "0 6px 18px rgba(2,6,23,0.35), inset 0 1px 0 rgba(255,255,255,0.01)",
+          backgroundColor: "transparent",
+        }}
+      >
+        {/* subtle dark frosted overlay for deeper "black glass" look */}
+        <div
+          aria-hidden
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              "linear-gradient(180deg, rgba(0,0,0,0.20), rgba(255,255,255,0.01))",
+          }}
+        />
+
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h2 className="text-xl font-semibold drop-shadow">Poll Results</h2>
+            <div className="text-sm text-white">{question?.domain}</div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="text-sm">
+              {totalResponses} response{totalResponses !== 1 ? "s" : ""}
+            </div>
+          </div>
+        </div>
+
+        {!question ? (
+          <div className="text-center py-12">No active question right now.</div>
+        ) : (
+          <div className="space-y-4">
+            {/* Info Domain */}
+            {question.domain === 'Info' && (
+              <div className="space-y-4">
+                <h2 className="text-2xl font-semibold text-white">
+                  {question.title}
+                </h2>
+                <div className="p-4 bg-white/10 rounded-lg">
+                  <p className="text-lg whitespace-pre-wrap text-white/90">
+                    {question.description}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Truth Domain */}
+            {question.domain === 'Truth' && (
+              <div className="space-y-4">
+                {question.statements?.map((statement, i) => {
+                  const count = optionRatingCounts[i] || 0;
+                  const percentage = totalResponses ? Math.round((count / totalResponses) * 100) : 0;
+                  
+                  return (
+                    <div key={i} className="p-4 bg-white/10 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-lg text-white">{statement}</p>
+                        <span className="text-xl font-bold text-white">{percentage}%</span>
+                      </div>
+                      <div className="w-full h-3 bg-white/8 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-300"
+                          style={{
+                            width: `${percentage}%`,
+                            background: "linear-gradient(90deg,#06b6d4,#3b82f6)",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Meme Domain */}
+            {question.domain === 'Meme' && (
+              <div className="space-y-4">
+                {question.mediaType === 'image' ? (
+                  <img 
+                    src={question.mediaUrl} 
+                    alt="Meme"
+                    className="max-w-full h-auto rounded-lg shadow-lg mb-4"
+                  />
+                ) : question.mediaType === 'video' && (
+                  <video 
+                    controls
+                    className="w-full rounded-lg shadow-lg mb-4"
+                  >
+                    <source src={question.mediaUrl} type="video/mp4" />
+                    Your browser does not support the video tag.
+                  </video>
+                )}
+                
+                {question.caption && (
+                  <p className="text-lg text-white/90 italic mb-4">
+                    {question.caption}
+                  </p>
+                )}
+
+                <h3 className="text-xl font-semibold text-white mb-2">Top 5 Most Voted Employees</h3>
+                <div className="space-y-2">
+                  {(() => {
+                    // Count votes for each employee
+                    const employeeVotes = {};
+                    optionRatingCounts.forEach((opt) => {
+                      const employee = opt.data?.selectedEmployee;
+                      if (employee) {
+                        employeeVotes[employee] = (employeeVotes[employee] || 0) + 1;
+                      }
+                    });
+
+                    // Sort and get top 5
+                    const topEmployees = Object.entries(employeeVotes)
+                      .sort(([,a], [,b]) => b - a)
+                      .slice(0, 5);
+
+                    if (topEmployees.length === 0) {
+                      return (
+                        <div className="text-center py-4 text-white/70">
+                          No employee votes yet
+                        </div>
+                      );
+                    }
+
+                    return topEmployees.map(([employee, votes], index) => {
+                      const percentage = totalResponses ? Math.round((votes / totalResponses) * 100) : 0;
+                      
+                      return (
+                        <div key={employee} className="p-3 bg-white/10 rounded-lg">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-lg text-white">{employee}</span>
+                            <span className="text-lg font-semibold text-white">{percentage}%</span>
+                          </div>
+                          <div className="w-full h-2 bg-white/8 rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-300"
+                              style={{
+                                width: `${percentage}%`,
+                                background: "linear-gradient(90deg,#06b6d4,#3b82f6)",
+                              }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* Default Domain (with options and ratings) */}
+            {!['Info', 'Truth', 'Meme'].includes(question.domain) && question.options && (
+              <div className="space-y-1">
+                <div className="mb-1">
+                  <p className="text-xl font-medium !text-white drop-shadow">
+                    {question.text}
+                  </p>
+                </div>
+                {question.options.map((opt, i) => {
+                  const counts = optionRatingCounts[i] || new Array(5).fill(0);
+                  const total = counts.reduce((a, b) => a + b, 0);
+                  const sum = counts.reduce(
+                    (acc, c, idx) => acc + c * (idx + 1),
+                    0
+                  );
+                  const avg = total ? sum / total : 0;
+                  const avgPct = Math.round((avg / 5) * 100);
+
+                  // compact card
+                  return (
+                    <div
+                      key={i}
+                      className="p-3 bg-white/3 backdrop-blur-lg backdrop-saturate-150 rounded-lg shadow-sm relative overflow-hidden"
+                      style={{
+                        border: "1px solid rgba(255,255,255,0.04)",
+                        boxShadow:
+                          "inset 0 1px 0 rgba(255,255,255,0.01), 0 6px 18px rgba(2,6,23,0.35)",
+                        background:
+                          "linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.005))",
+                      }}
+                    >
+                      <div className="flex items-center justify-between gap-4 mb-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-semibold text-white truncate">
+                            {opt}
+                          </div>
+                          <div className="text-xs mt-1 text-white/80">
+                            {total ? `${avg.toFixed(2)} / 5` : "No responses yet"}
+                          </div>
+                        </div>
+
+                        {/* glassy counter pill */}
+                        <div
+                          className="flex items-center gap-3 px-3 py-1 rounded-full"
+                          style={{
+                            background:
+                              "linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01))",
+                            backdropFilter: "blur(12px) saturate(140%)",
+                            WebkitBackdropFilter: "blur(12px) saturate(140%)",
+                            border: "1px solid rgba(255,255,255,0.06)",
+                            boxShadow:
+                              "0 6px 18px rgba(2,6,23,0.35), inset 0 1px 0 rgba(255,255,255,0.01)",
+                          }}
+                          aria-hidden
+                        >
+                          <div className="text-sm whitespace-nowrap text-white/90">
+                            {pctLabelFor(avgPct)}
+                          </div>
+
+                          <div className="text-sm font-semibold tabular-nums text-white">
+                            {avgPct}%
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* single progress bar showing average */}
+                      <div
+                        role="progressbar"
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={avgPct}
+                        aria-label={`${opt} average rating ${avg.toFixed(
+                          2
+                        )} out of 5`}
+                        className="w-full h-3 bg-white/8 rounded-full overflow-hidden"
+                      >
+                        <div
+                          className="h-full rounded-full transition-all duration-300"
+                          style={{
+                            width: `${avgPct}%`,
+                            background: "linear-gradient(90deg,#06b6d4,#3b82f6)",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
