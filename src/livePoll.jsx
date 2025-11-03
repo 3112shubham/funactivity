@@ -6,7 +6,7 @@ const EMPLOYEE_LIST = [
   'Anant Sapru',
   'Arshin Shaikh',
   'Dheeraj Jalali',
-  'Dipratna Mahire',
+  'Deepratna Mahire',
   'Gaurav Patil',
   'Gayatri Pardeshi',
   'Laxman Bhagat',
