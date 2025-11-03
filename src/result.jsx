@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import { db, doc, getDoc, onSnapshot, collection, getDocs } from "../firebase";
 import { Link } from "react-router-dom";
 import bgImage from "./assets/Background.png";
-import logoRightbottom from "./assets/GA logo new.png";
 
 const RATING_LABELS = [
   "Not useful",
@@ -189,11 +188,11 @@ export default function Result() {
         className="absolute inset-0 bg-gradient-to-br from-black/50 via-purple-900/20 to-blue-900/30 pointer-events-none"
       />
 
-      {/* Single bottom-right logo */}
+      {/* Single top-left logo */}
       <img
-        src={logoRightbottom}
-        alt="Bottom right logo"
-        className="fixed bottom-6 right-6 w-32 h-auto object-contain z-30 pointer-events-none opacity-90"
+        src="https://res.cloudinary.com/dcjmaapvi/image/upload/v1740489025/ga-hori_ylcnm3.png"
+        alt="Top left logo"
+        className="fixed top-6 left-6 w-32 h-auto object-contain z-30 pointer-events-none opacity-90"
       />
 
       <div
@@ -438,7 +437,7 @@ export default function Result() {
                                   <span className="text-sm font-medium text-white/70 w-8">
                                     #{index + 1}
                                   </span>
-                                  <span className="text-lg text-white font-medium">
+                                  <span className="text-lg text-white font-semibold" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.5)' }}>
                                     {employee}
                                   </span>
                                 </div>
