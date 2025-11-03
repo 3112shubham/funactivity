@@ -388,10 +388,6 @@ export default function Result() {
                       scrollbarColor: "rgba(255,255,255,0.3) transparent",
                     }}
                   >
-                    {/* top gradient fade */}
-                    <div className="absolute top-0 left-0 w-full h-6 bg-gradient-to-b from-[#0a0a0a]/60 to-transparent pointer-events-none z-10"></div>
-                    {/* bottom gradient fade */}
-                    <div className="absolute bottom-0 left-0 w-full h-6 bg-gradient-to-t from-[#0a0a0a]/60 to-transparent pointer-events-none z-10"></div>
 
                     <div className="space-y-4 pr-1">
                       {(() => {
@@ -431,34 +427,23 @@ export default function Result() {
                           const percentage = totalResponses
                             ? Math.round((votes / totalResponses) * 100)
                             : 0;
-                          const isTop3 = index < 3;
 
                           return (
                             <div
                               key={employee}
-                              className={`p-5 rounded-xl transition-all duration-300 hover:scale-[1.02] ${
-                                isTop3 ? "ring-2 ring-yellow-400/30" : ""
-                              }`}
-                              style={{
-                                background:
-                                  "linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03))",
-                                backdropFilter: "blur(20px)",
-                                border: "1px solid rgba(255,255,255,0.1)",
-                              }}
+                              className="p-4 rounded-lg bg-white/5 border border-white/10 transition-all duration-300"
                             >
-                              <div className="flex items-center justify-between mb-3">
-                                <div className="flex items-center gap-3">
-                                  {isTop3 && (
-                                    <span className="text-xl">
-                                      {["🥇", "🥈", "🥉"][index]}
-                                    </span>
-                                  )}
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                  <span className="text-sm font-medium text-white/70 w-8">
+                                    #{index + 1}
+                                  </span>
                                   <span className="text-lg text-white font-medium">
                                     {employee}
                                   </span>
                                 </div>
-                                <div className="flex items-center gap-3">
-                                  <span className="text-lg font-bold text-white">
+                                <div className="flex items-center gap-4">
+                                  <span className="text-lg font-semibold text-white">
                                     {percentage}%
                                   </span>
                                   <span className="text-sm text-white/60">
@@ -466,19 +451,11 @@ export default function Result() {
                                   </span>
                                 </div>
                               </div>
-                              <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden">
+                              <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden mt-3">
                                 <div
-                                  className="h-full rounded-full transition-all duration-1000 ease-out"
+                                  className="h-full bg-white/40 rounded-full transition-all duration-1000 ease-out"
                                   style={{
                                     width: `${percentage}%`,
-                                    background: isTop3
-                                      ? "linear-gradient(90deg, #f59e0b, #eab308)"
-                                      : "linear-gradient(90deg, #06b6d4, #3b82f6)",
-                                    boxShadow: `0 0 15px ${
-                                      isTop3
-                                        ? "rgba(245, 158, 11, 0.4)"
-                                        : "rgba(59, 130, 246, 0.3)"
-                                    }`,
                                   }}
                                 />
                               </div>
