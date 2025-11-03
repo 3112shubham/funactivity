@@ -2,11 +2,32 @@ import React, { useEffect, useRef, useState } from 'react';
 import { db, doc, getDoc, onSnapshot, setDoc } from '../firebase';
 
 const EMPLOYEE_LIST = [
-  'John Doe',
-  'Jane Smith',
-  'Mike Johnson',
-  'Sarah Williams',
-  'David Brown'
+  'Ajay Pawar',
+  'Anant Sapru',
+  'Arshin Shaikh',
+  'Dheeraj Jalali',
+  'Dipratna Mahire',
+  'Gaurav Patil',
+  'Gayatri Pardeshi',
+  'Laxman Bhagat',
+  'Mayank Tiwari',
+  'Mrittika Ghosh',
+  'Nasim Shaikh',
+  'Nazir Nazari',
+  'Neha Dube',
+  'Nishad Kulkarni',
+  'Pradnya Nirmal',
+  'Prakriti Dwivedi',
+  'Pratik Nale',
+  'Purva Palankar',
+  'Sarthak Shukla',
+  'Shashi Bhat',
+  'Shruti Borse',
+  'Shubham Galande',
+  'Sumedh Sangle',
+  'Ummeaiman Ansari',
+  'Unnati Jain',
+  'Vanshika Nalode'
 ]; // Hardcoded employee list - you can replace with your actual list
 
 const RATING_LABELS = ['Not useful', 'Slightly useful', 'Useful', 'Very useful', 'Most useful']; // 5-level labels
@@ -32,6 +53,8 @@ export default function LivePoll() {
   const [question, setQuestion] = useState(null);
   const [ratings, setRatings] = useState([0]); // For Truth type: single selection
   const [selectedEmployee, setSelectedEmployee] = useState(''); // For Meme type
+  const [showEmployeeModal, setShowEmployeeModal] = useState(false);
+  const [filteredEmployees, setFilteredEmployees] = useState(EMPLOYEE_LIST);
   const [submitted, setSubmitted] = useState(false);
   const [missingIndices, setMissingIndices] = useState([]); // indices of options missing a rating
   const clientId = useRef(getOrCreateClientId());
@@ -102,8 +125,8 @@ export default function LivePoll() {
         missing.push(0);
       }
     } else if (question.domain === 'Meme') {
-      // For Meme, we need an employee selection
-      if (!selectedEmployee) {
+      // For Meme, we need an employee selection from the list
+      if (!selectedEmployee || !EMPLOYEE_LIST.includes(selectedEmployee)) {
         valid = false;
         missing.push(0);
       }
@@ -194,12 +217,14 @@ export default function LivePoll() {
           </div>
         ) : (
           <>
-            <header className="flex items-start justify-between gap-2 mb-4">
-              <div>
-                <div className="text-xs text-white/70">{question.domain}</div>
-                <h1 className="text-xl font-semibold leading-tight">Live Poll</h1>
-              </div>
-            </header>
+            {question.domain !== 'Info' && (
+              <header className="flex items-start justify-between gap-2 mb-4">
+                <div>
+                  <div className="text-xs text-white/70">{question.domain}</div>
+                  <h1 className="text-xl font-semibold leading-tight">Live Poll</h1>
+                </div>
+              </header>
+            )}
 
             <section className="mb-4">
               {question.domain === 'Meme' && (
@@ -213,8 +238,13 @@ export default function LivePoll() {
                     />
                   ) : question.mediaType === 'video' && (
                     <video 
-                      controls
+                      key={question.id}
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
                       className="w-full rounded-lg shadow-lg"
+                      style={{ height: '60vh' }}
                     >
                       <source src={question.mediaUrl} type="video/mp4" />
                       Your browser does not support the video tag.
@@ -229,24 +259,84 @@ export default function LivePoll() {
                   )}
 
                   {/* Employee Selection */}
-                  <div className="space-y-2">
+                  <div className="space-y-2 relative">
                     <label className="block text-sm text-white/70">Select Employee:</label>
-                    <select
-                      value={selectedEmployee}
-                      onChange={(e) => setSelectedEmployee(e.target.value)}
-                      className="w-full p-3 rounded-lg bg-white/10 text-white border border-white/20
-                             focus:outline-none focus:ring-2 focus:ring-[#0ea5a4] focus:border-transparent"
-                    >
-                      <option value="">Choose an employee...</option>
-                      {EMPLOYEE_LIST.map((emp) => (
-                        <option key={emp} value={emp} className="bg-[#214663] text-white">
-                          {emp}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={selectedEmployee}
+                        onClick={() => {
+                          setFilteredEmployees(EMPLOYEE_LIST);
+                          setShowEmployeeModal(true);
+                        }}
+                        placeholder="Select an employee..."
+                        className="w-full p-3 pr-10 rounded-lg bg-white/10 text-white border border-white/20
+                               focus:outline-none focus:ring-2 focus:ring-[#0ea5a4] focus:border-transparent"
+                        readOnly
+                      />
+                      <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/70 pointer-events-none">▼</span>
+                    </div>
+                    {showEmployeeModal && (
+                      <div className="fixed inset-0 bg-black/70 z-50">
+                        <div className="w-full h-full bg-white/10 backdrop-blur-xl p-6 flex flex-col">
+                          <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-xl font-semibold text-white">Select Employee</h3>
+                            <button
+                              onClick={() => setShowEmployeeModal(false)}
+                              className="text-white/70 hover:text-white text-2xl"
+                            >
+                              ×
+                            </button>
+                          </div>
+                          <input
+                            type="text"
+                            placeholder="Search employees..."
+                            onChange={(e) => {
+                              const query = e.target.value.toLowerCase();
+                              setFilteredEmployees(EMPLOYEE_LIST.filter(emp => emp.toLowerCase().startsWith(query)));
+                            }}
+                            className="w-full p-3 mb-4 rounded-lg bg-white/10 text-white border border-white/20
+                                   focus:outline-none focus:ring-2 focus:ring-[#0ea5a4] focus:border-transparent"
+                            autoFocus
+                          />
+                          <div className="flex-1 overflow-y-auto">
+                            {filteredEmployees.length > 0 ? (
+                              filteredEmployees.map((emp) => (
+                                <div
+                                  key={emp}
+                                  onClick={() => {
+                                    setSelectedEmployee(emp);
+                                    setShowEmployeeModal(false);
+                                  }}
+                                  className="p-3 hover:bg-white/20 cursor-pointer text-white rounded-lg mb-1"
+                                >
+                                  {emp}
+                                </div>
+                              ))
+                            ) : (
+                              <div className="p-3 text-white/70">No employees found</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     {missingIndices.length > 0 && (
                       <p className="text-sm text-red-400">Please select an employee.</p>
                     )}
+                  </div>
+
+                  {/* Submit button for Meme */}
+                  <div className="mt-4 flex justify-end">
+                    <button
+                      onClick={handleSubmit}
+                      className="px-4 py-1.5 rounded-md text-white text-sm font-semibold 
+                               focus:outline-none focus:ring-2 focus:ring-offset-2 
+                               transition shadow-lg transform-gpu duration-150 ease-out
+                               bg-gradient-to-r from-[#0ea5a4] to-[#0597a6] 
+                               hover:from-[#09a8a4] hover:to-[#048f9a] ring-2 ring-white/10"
+                    >
+                      Submit
+                    </button>
                   </div>
                 </div>
               )}
@@ -288,11 +378,11 @@ export default function LivePoll() {
 
               {question.domain === 'Info' && (
                 <div className="space-y-4">
-                  <h2 className="text-2xl sm:text-3xl font-semibold !text-white">
+                  <h2 className="text-4xl font-semibold text-white text-center">
                     {question.title}
                   </h2>
-                  <div className="bg-white/10 p-4 rounded-lg">
-                    <p className="text-lg whitespace-pre-wrap">
+                  <div className="bg-white/10 p-8 rounded-lg">
+                    <p className="text-xl whitespace-pre-wrap text-white/90 text-center leading-relaxed">
                       {question.description}
                     </p>
                   </div>
@@ -405,21 +495,24 @@ export default function LivePoll() {
               </form>
             )}
 
-            <div className="mt-4 flex flex-col sm:flex-row justify-end items-center gap-2">
-              <div className="text-xs text-white/70 mr-auto hidden sm:block">
-                {question.domain === 'Truth' && ratings[0] === 0 ? 'Please select a statement' : 'Ready to submit'}
+            {/* Submit button for non-Meme and non-Info domains */}
+            {question.domain !== 'Meme' && question.domain !== 'Info' && (
+              <div className="mt-4 flex flex-col sm:flex-row justify-end items-center gap-2">
+                <div className="text-xs text-white/70 mr-auto hidden sm:block">
+                  {question.domain === 'Truth' && ratings[0] === 0 ? 'Please select a statement' : 'Ready to submit'}
+                </div>
+                <button
+                  onClick={handleSubmit}
+                  className="px-4 py-1.5 rounded-md text-white text-sm font-semibold 
+                           focus:outline-none focus:ring-2 focus:ring-offset-2 
+                           transition shadow-lg transform-gpu duration-150 ease-out
+                           bg-gradient-to-r from-[#0ea5a4] to-[#0597a6] 
+                           hover:from-[#09a8a4] hover:to-[#048f9a] ring-2 ring-white/10"
+                >
+                  Submit
+                </button>
               </div>
-              <button
-                onClick={handleSubmit}
-                className="px-4 py-1.5 rounded-md text-white text-sm font-semibold 
-                         focus:outline-none focus:ring-2 focus:ring-offset-2 
-                         transition shadow-lg transform-gpu duration-150 ease-out
-                         bg-gradient-to-r from-[#0ea5a4] to-[#0597a6] 
-                         hover:from-[#09a8a4] hover:to-[#048f9a] ring-2 ring-white/10"
-              >
-                Submit
-              </button>
-            </div>
+            )}
           </>
         )}
       </div>

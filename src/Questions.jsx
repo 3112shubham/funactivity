@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   db,
   collection,
@@ -31,6 +31,9 @@ export default function Admin() {
   // create form state
   const [domainSelect, setDomainSelect] = useState('');
   const [mediaFile, setMediaFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
   const [optionalText, setOptionalText] = useState('');
   const [statements, setStatements] = useState(['']);
   const [infoTitle, setInfoTitle] = useState('');
@@ -59,17 +62,84 @@ export default function Admin() {
     };
   }, []);
 
+  // cleanup preview URL on unmount
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  // ref for the preview video so we can reliably start playback when a file is selected
+  const previewVideoRef = useRef(null);
+
+  useEffect(() => {
+    // If the selected media is a video, try to autoplay (muted) for better UX.
+    if (previewUrl && mediaFile && mediaFile.type && mediaFile.type.startsWith('video/')) {
+      const v = previewVideoRef.current;
+      if (v) {
+        // set muted to allow autoplay in browsers, then attempt play
+        v.muted = true;
+        const p = v.play();
+        if (p && typeof p.then === 'function') {
+          p.catch(() => {
+            // ignore autoplay rejection (browser policies) — user can still click to play
+          });
+        }
+      }
+    }
+  }, [previewUrl, mediaFile]);
+
+  // helper: upload with progress using XHR
+  const uploadToCloudinary = (file, onProgress) => {
+    return new Promise((resolve, reject) => {
+      const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+      const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+      if (!cloudName || !uploadPreset) {
+        reject(new Error('Cloudinary not configured. Set VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET'));
+        return;
+      }
+
+      const url = `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`;
+      const xhr = new XMLHttpRequest();
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', uploadPreset);
+
+      xhr.open('POST', url);
+
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable && typeof onProgress === 'function') {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          onProgress(pct);
+        }
+      });
+
+      xhr.onreadystatechange = () => {
+        if (xhr.readyState !== 4) return;
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const json = JSON.parse(xhr.responseText);
+            resolve(json);
+          } catch (err) {
+            reject(err);
+          }
+        } else {
+          reject(new Error(`Upload failed with status ${xhr.status}: ${xhr.responseText}`));
+        }
+      };
+
+      xhr.onerror = () => reject(new Error('Network error during upload'));
+      xhr.send(formData);
+    });
+  };
+
   async function fetchQuestions() {
     const q = query(collection(db, 'questions'), orderBy('createdAt', 'desc'));
     const snap = await getDocs(q);
     setQuestions(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
   }
 
-  const handleOptionChange = (i, v) => {
-    const copy = [...options];
-    copy[i] = v;
-    setOptions(copy);
-  };
+  
 
   const handleCreateAndActivate = async () => {
     if (!domainSelect) return alert('Please select a domain.');
@@ -82,13 +152,35 @@ export default function Admin() {
     // Validate and prepare payload based on domain
     if (domainSelect === 'Meme') {
       if (!mediaFile) return alert('Please upload an image or video.');
-      // TODO: Implement file upload to storage service
-      payload = {
-        ...payload,
-        mediaType: mediaFile.type.startsWith('image/') ? 'image' : 'video',
-        mediaUrl: 'URL_TO_UPLOADED_FILE', // You'll need to implement file upload
-        caption: optionalText
-      };
+
+      // client-side validations
+      const maxBytes = 20 * 1024 * 1024; // 20 MB
+      if (mediaFile.size > maxBytes) return alert('File too large. Max 20MB allowed.');
+
+      // Upload to Cloudinary (client-side unsigned upload) with progress
+      try {
+        setIsUploading(true);
+        setUploadProgress(0);
+        const json = await uploadToCloudinary(mediaFile, (pct) => setUploadProgress(pct));
+
+        payload = {
+          ...payload,
+          mediaType: (json.resource_type && json.resource_type === 'video') ? 'video' : 'image',
+          mediaUrl: json.secure_url || json.url,
+          caption: optionalText || '',
+          _mediaMeta: {
+            public_id: json.public_id,
+            format: json.format,
+            bytes: json.bytes,
+          },
+        };
+      } catch (err) {
+        console.error('upload error', err);
+        return alert('Error uploading media. Check console for details.');
+      } finally {
+        setIsUploading(false);
+        setUploadProgress(0);
+      }
     }
     else if (domainSelect === 'Truth') {
       const cleanedStatements = statements.map(s => s.trim()).filter(s => s !== '');
@@ -222,9 +314,45 @@ export default function Admin() {
                 <input
                   type="file"
                   accept="image/*,video/*"
-                  onChange={(e) => setMediaFile(e.target.files[0])}
+                  onChange={(e) => {
+                    const f = e.target.files && e.target.files[0];
+                    if (!f) return;
+                    // simple client-side validation
+                    const maxBytes = 20 * 1024 * 1024; // 20MB
+                    if (f.size > maxBytes) {
+                      alert('File too large (max 20MB)');
+                      e.target.value = '';
+                      return;
+                    }
+                    setMediaFile(f);
+                    // create preview
+                    if (previewUrl) URL.revokeObjectURL(previewUrl);
+                    const p = URL.createObjectURL(f);
+                    setPreviewUrl(p);
+                    setUploadProgress(0);
+                  }}
                   className="w-full p-2 border rounded"
                 />
+
+                {/* preview */}
+                {previewUrl && (
+                  <div className="mt-3">
+                    {mediaFile && mediaFile.type.startsWith('image/') ? (
+                      <img src={previewUrl} alt="preview" className="max-w-full h-auto rounded-lg shadow" />
+                    ) : (
+                      // Autoplay muted, loop, and hide controls for immediate preview playback
+                      <video ref={previewVideoRef} src={previewUrl} autoPlay muted loop playsInline className="w-full rounded-lg shadow" />
+                    )}
+                  </div>
+                )}
+                {/* progress */}
+                {isUploading && (
+                  <div className="mt-2 w-full bg-gray-200 rounded overflow-hidden">
+                    <div className="bg-blue-500 text-white text-xs text-center" style={{width: `${uploadProgress}%`}}>
+                      {uploadProgress}%
+                    </div>
+                  </div>
+                )}
               </div>
               
               <div>
@@ -236,7 +364,6 @@ export default function Admin() {
                   className="w-full p-2 border rounded"
                 />
               </div>
-
 
             </div>
           )}
@@ -298,7 +425,10 @@ export default function Admin() {
           )}
 
           <div className="flex gap-2 mt-3">
-            <button onClick={handleCreateAndActivate} className="px-4 py-2 bg-blue-600 text-white rounded">
+            <button
+              onClick={handleCreateAndActivate}
+              className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
+            >
               Create + Activate
             </button>
             <button onClick={handleDeactivate} className="px-4 py-2 bg-gray-300 rounded">

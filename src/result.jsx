@@ -238,17 +238,19 @@ export default function Result() {
           }}
         />
 
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <h2 className="text-xl font-semibold drop-shadow">Poll Results</h2>
-            <div className="text-sm text-white">{question?.domain}</div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="text-sm">
-              {totalResponses} response{totalResponses !== 1 ? "s" : ""}
+        {question.domain !== 'Info' && (
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h2 className="text-xl font-semibold drop-shadow">Poll Results</h2>
+              <div className="text-sm text-white">{question?.domain}</div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="text-sm">
+                {totalResponses} response{totalResponses !== 1 ? "s" : ""}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {!question ? (
           <div className="text-center py-12">No active question right now.</div>
@@ -257,11 +259,11 @@ export default function Result() {
             {/* Info Domain */}
             {question.domain === 'Info' && (
               <div className="space-y-4">
-                <h2 className="text-2xl font-semibold text-white">
+                <h2 className="text-4xl font-semibold text-white text-center">
                   {question.title}
                 </h2>
-                <div className="p-4 bg-white/10 rounded-lg">
-                  <p className="text-lg whitespace-pre-wrap text-white/90">
+                <div className="p-8 bg-white/10 rounded-lg">
+                  <p className="text-xl whitespace-pre-wrap text-white/90 text-center leading-relaxed">
                     {question.description}
                   </p>
                 </div>
@@ -298,76 +300,85 @@ export default function Result() {
 
             {/* Meme Domain */}
             {question.domain === 'Meme' && (
-              <div className="space-y-4">
-                {question.mediaType === 'image' ? (
-                  <img 
-                    src={question.mediaUrl} 
-                    alt="Meme"
-                    className="max-w-full h-auto rounded-lg shadow-lg mb-4"
-                  />
-                ) : question.mediaType === 'video' && (
-                  <video 
-                    controls
-                    className="w-full rounded-lg shadow-lg mb-4"
-                  >
-                    <source src={question.mediaUrl} type="video/mp4" />
-                    Your browser does not support the video tag.
-                  </video>
-                )}
-                
-                {question.caption && (
-                  <p className="text-lg text-white/90 italic mb-4">
-                    {question.caption}
-                  </p>
-                )}
+              <div className="flex flex-col lg:flex-row gap-6">
+                {/* Left side: Meme media */}
+                <div className="flex-1">
+                  {question.mediaType === 'image' ? (
+                    <img 
+                      src={question.mediaUrl} 
+                      alt="Meme"
+                      className="max-w-full h-auto rounded-lg shadow-lg"
+                    />
+                  ) : question.mediaType === 'video' && (
+                    <video 
+                      key={question.id}
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                      className="w-full rounded-lg shadow-lg"
+                    >
+                      <source src={question.mediaUrl} type="video/mp4" />
+                      Your browser does not support the video tag.
+                    </video>
+                  )}
+                  
+                  {question.caption && (
+                    <p className="text-lg text-white/90 italic mt-4">
+                      {question.caption}
+                    </p>
+                  )}
+                </div>
 
-                <h3 className="text-xl font-semibold text-white mb-2">Top 5 Most Voted Employees</h3>
-                <div className="space-y-2">
-                  {(() => {
-                    // Count votes for each employee
-                    const employeeVotes = {};
-                    optionRatingCounts.forEach((opt) => {
-                      const employee = opt.data?.selectedEmployee;
-                      if (employee) {
-                        employeeVotes[employee] = (employeeVotes[employee] || 0) + 1;
+                {/* Right side: Employee poll results */}
+                <div className="flex-1">
+                  <h3 className="text-xl font-semibold text-white mb-4">Employee Votes</h3>
+                  <div className="space-y-3 max-h-[70vh] overflow-y-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                    {(() => {
+                      // Count votes for each employee
+                      const employeeVotes = {};
+                      optionRatingCounts.forEach((opt) => {
+                        const employee = opt.data?.selectedEmployee;
+                        if (employee) {
+                          employeeVotes[employee] = (employeeVotes[employee] || 0) + 1;
+                        }
+                      });
+
+                      // Sort all employees by votes
+                      const allEmployees = Object.entries(employeeVotes)
+                        .sort(([,a], [,b]) => b - a);
+
+                      if (allEmployees.length === 0) {
+                        return (
+                          <div className="text-center py-8 text-white/70">
+                            No votes yet
+                          </div>
+                        );
                       }
-                    });
 
-                    // Sort and get top 5
-                    const topEmployees = Object.entries(employeeVotes)
-                      .sort(([,a], [,b]) => b - a)
-                      .slice(0, 5);
-
-                    if (topEmployees.length === 0) {
-                      return (
-                        <div className="text-center py-4 text-white/70">
-                          No employee votes yet
-                        </div>
-                      );
-                    }
-
-                    return topEmployees.map(([employee, votes], index) => {
-                      const percentage = totalResponses ? Math.round((votes / totalResponses) * 100) : 0;
-                      
-                      return (
-                        <div key={employee} className="p-3 bg-white/10 rounded-lg">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-lg text-white">{employee}</span>
-                            <span className="text-lg font-semibold text-white">{percentage}%</span>
+                      return allEmployees.map(([employee, votes]) => {
+                        const percentage = totalResponses ? Math.round((votes / totalResponses) * 100) : 0;
+                        
+                        return (
+                          <div key={employee} className="p-4 bg-white/10 rounded-lg">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-lg text-white">{employee}</span>
+                              <span className="text-lg font-semibold text-white">{percentage}%</span>
+                            </div>
+                            <div className="w-full h-3 bg-white/8 rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all duration-300"
+                                style={{
+                                  width: `${percentage}%`,
+                                  background: "linear-gradient(90deg,#06b6d4,#3b82f6)",
+                                }}
+                              />
+                            </div>
                           </div>
-                          <div className="w-full h-2 bg-white/8 rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full transition-all duration-300"
-                              style={{
-                                width: `${percentage}%`,
-                                background: "linear-gradient(90deg,#06b6d4,#3b82f6)",
-                              }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    });
-                  })()}
+                        );
+                      });
+                    })()}
+                  </div>
                 </div>
               </div>
             )}

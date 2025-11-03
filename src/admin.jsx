@@ -173,7 +173,7 @@ export default function Admin() {
           <h2 className="font-medium mb-2">Existing questions</h2>
           <div className="space-y-3">
             {questions.length === 0 && <div className="text-sm text-gray-500">No questions yet</div>}
-            {questions.map((q) => (
+            {questions.map((q, index) => (
               <div key={q.id} className="p-3 border rounded flex justify-between items-start">
                 <div className="flex-1">
                   {editingId === q.id ? (
@@ -243,7 +243,7 @@ export default function Admin() {
                   ) : (
                     <>
                       <div className="text-xs text-gray-500 mb-1">{q.domain}</div>
-                      <div className="font-semibold">{q.text}</div>
+                      <div className="font-semibold">{index + 1}. {q.text}</div>
                       <div className="text-sm text-gray-600 mt-1">
                         {Array.isArray(q.options) &&
                           q.options.map((o, i) => (
